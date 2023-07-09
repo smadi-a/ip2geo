@@ -1,69 +1,10 @@
-use dirs;
+mod api_client;
 use std::fs;
-use std::fmt;
 use std::env;
 use std::path::Path;
-use std::convert::From;
 use regex::Regex;
-use reqwest::blocking::get;
-use reqwest::Error as ReqwestError;
-use serde::Deserialize;
-use serde_json::Error as JsonError;
 
 const VARS_FILE: &str = ".ip2geo";
-
-#[derive(Debug)]
-enum MyError {
-    Json(JsonError),
-    Reqwest(ReqwestError),
-}
-
-impl fmt::Display for MyError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            MyError::Json(err) => write!(f, "JSON Error: {}", err),
-            MyError::Reqwest(err) => write!(f, "Reqwest Error: {}", err),
-        }
-    }
-}
-
-impl From<JsonError> for MyError {
-    fn from(error: JsonError) -> Self {
-        MyError::Json(error)
-    }
-}
-
-impl From<ReqwestError> for MyError {
-    fn from(error: ReqwestError) -> Self {
-        MyError::Reqwest(error)
-    }
-}
-
-struct Response {
-    code: u16,
-    body: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct IPInfo {
-    city: String,
-    country_name: String,
-}
-
-impl Response {
-    fn is_success(&self) -> bool {
-        match self.code {
-            200 => true,
-            _=> false,
-        }
-    }
-
-    fn parse_info(&self) -> Result<IPInfo, MyError> {
-        let ip_info: IPInfo = serde_json::from_str(&self.body).map_err(MyError::from)?;
-
-        Ok(ip_info)
-    }
-}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -81,7 +22,7 @@ fn main() {
         exit_gracefully("No API key provided");
     }
 
-    match get_data(api_key, ip_address.to_string()) {
+    match api_client::get_data(api_key, ip_address.to_string()) {
         Ok(response) => {
             if response.is_success() {
                 match response.parse_info() {
@@ -118,16 +59,4 @@ fn get_api_key() -> String {
     let api_key: String = fs::read_to_string(vars_file_path).expect("Failed to read API key");
 
     api_key
-}
-
-fn get_data(api_key: String, ip_address: String) -> Result<Response, MyError> {
-    let request_url = format!("https://api.ipgeolocation.io/ipgeo?apiKey={}&ip={}", api_key, ip_address);
-    let response = get(request_url)?;
-    let code = response.status().as_u16();
-    let mut body = String::new();
-    if response.status().is_success() {
-        body = response.text()?;
-    }
-
-    Ok(Response { code, body })
 }
