@@ -1,0 +1,9 @@
+[package]
+name = "ip2geo"
+version = "1.0.0"
+authors = ["smadi-a"]
+edition = "2018"
+
+[[bin]]
+name = "ip2geo"
+path = "src/main.rs"
