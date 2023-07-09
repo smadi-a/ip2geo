@@ -2,9 +2,24 @@ use dirs;
 use std::fs;
 use std::env;
 use regex::Regex;
+use reqwest::Error;
 use std::path::Path;
+use reqwest::blocking::get;
 
 const VARS_FILE: &str = ".ip2geo";
+struct Response {
+    code: u16,
+    body: String,
+}
+
+impl Response {
+    fn is_success(self) -> bool {
+        match self.code {
+            200 => true,
+            _=> false,
+        }
+    }
+}
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -21,8 +36,17 @@ fn main() {
     if api_key.is_empty() {
         exit_gracefully("No API key provided");
     }
-    println!("{}", api_key);
 
+    match get_data(api_key, ip_address.to_string()) {
+        Ok(response) => {
+            if response.is_success() {
+                println!("We're doing it!");
+            } else {
+                println!("Request failed");
+            }
+        }
+        Err(e) => eprintln!("Error: {}", e),
+    }
 }
 
 fn exit_gracefully(message: &str) {
@@ -43,5 +67,18 @@ fn get_api_key() -> String {
     }
 
     let api_key: String = fs::read_to_string(vars_file_path).expect("Failed to read API key");
+
     api_key
+}
+
+fn get_data(api_key: String, ip_address: String) -> Result<Response, Error> {
+    let request_url = format!("https://api.ipgeolocation.io/ipgeo?apiKey={}&ip={}", api_key, ip_address);
+    let response = get(request_url)?;
+    let code = response.status().as_u16();
+    let mut body = String::new();
+    if response.status().is_success() {
+        body = response.text()?;
+    }
+
+    Ok(Response { code, body })
 }
