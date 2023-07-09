@@ -1,30 +1,74 @@
 use dirs;
 use std::fs;
+use std::fmt;
 use std::env;
-use regex::Regex;
-use reqwest::Error;
 use std::path::Path;
+use std::convert::From;
+use regex::Regex;
 use reqwest::blocking::get;
+use reqwest::Error as ReqwestError;
+use serde::Deserialize;
+use serde_json::Error as JsonError;
 
 const VARS_FILE: &str = ".ip2geo";
+
+#[derive(Debug)]
+enum MyError {
+    Json(JsonError),
+    Reqwest(ReqwestError),
+}
+
+impl fmt::Display for MyError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MyError::Json(err) => write!(f, "JSON Error: {}", err),
+            MyError::Reqwest(err) => write!(f, "Reqwest Error: {}", err),
+        }
+    }
+}
+
+impl From<JsonError> for MyError {
+    fn from(error: JsonError) -> Self {
+        MyError::Json(error)
+    }
+}
+
+impl From<ReqwestError> for MyError {
+    fn from(error: ReqwestError) -> Self {
+        MyError::Reqwest(error)
+    }
+}
+
 struct Response {
     code: u16,
     body: String,
 }
 
+#[derive(Debug, Deserialize)]
+struct IPInfo {
+    city: String,
+    country_name: String,
+}
+
 impl Response {
-    fn is_success(self) -> bool {
+    fn is_success(&self) -> bool {
         match self.code {
             200 => true,
             _=> false,
         }
+    }
+
+    fn parse_info(&self) -> Result<IPInfo, MyError> {
+        let ip_info: IPInfo = serde_json::from_str(&self.body).map_err(MyError::from)?;
+
+        Ok(ip_info)
     }
 }
 
 fn main() {
     let args: Vec<String> = env::args().collect();
     if args.len() == 1 {
-        exit_gracefully("Which IP address do you need to lookup?\nFor example, try 'ip2geo 210.50.134.58'\n\n\nip2geo uses ipgeolocation.io\nDon't forget to add your API key in your ip2geo dot file");
+        exit_gracefully("Which IP address do you need to lookup?\nFor example, try 'ip2geo 87.172.253.31'\n\n\nip2geo uses ipgeolocation.io\nDon't forget to add your API key in your ip2geo dot file");
     }
 
     let ip_address: &str = &args[1];
@@ -40,9 +84,14 @@ fn main() {
     match get_data(api_key, ip_address.to_string()) {
         Ok(response) => {
             if response.is_success() {
-                println!("We're doing it!");
+                match response.parse_info() {
+                    Ok(ip_info) => {
+                        println!("{} - {}", ip_info.city, ip_info.country_name);
+                    }
+                    Err(e) => eprintln!("Error: {}", e),
+                }
             } else {
-                println!("Request failed");
+                println!("Request failed with code {}", response.code);
             }
         }
         Err(e) => eprintln!("Error: {}", e),
@@ -71,7 +120,7 @@ fn get_api_key() -> String {
     api_key
 }
 
-fn get_data(api_key: String, ip_address: String) -> Result<Response, Error> {
+fn get_data(api_key: String, ip_address: String) -> Result<Response, MyError> {
     let request_url = format!("https://api.ipgeolocation.io/ipgeo?apiKey={}&ip={}", api_key, ip_address);
     let response = get(request_url)?;
     let code = response.status().as_u16();
