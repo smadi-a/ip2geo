@@ -7,3 +7,10 @@ edition = "2018"
 [[bin]]
 name = "ip2geo"
 path = "src/main.rs"
+
+[dependencies]
+regex = "1.5"
+dirs = "2.0"
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+reqwest = { version = "0.11", features = ["blocking"] }
