@@ -7,3 +7,6 @@ edition = "2018"
 [[bin]]
 name = "ip2geo"
 path = "src/main.rs"
+
+[dependencies]
+regex = "1.5"
