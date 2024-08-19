@@ -1,2 +1,5 @@
 # Ignore Vim swap files
 *.swp
+
+# Ignore build files
+target
